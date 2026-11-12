@@ -1,0 +1,18 @@
+# Raw multi-gigabyte datasets (too large for GitHub; regenerated locally via subset_data.py)
+data/raw/
+data/splits/
+
+# Python caches & environments
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.venv/
+venv/
+env/
+
+# Jupyter & OS
+.ipynb_checkpoints/
+.DS_Store
+Thumbs.db
+

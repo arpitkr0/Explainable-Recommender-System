@@ -1,0 +1,25 @@
+# ──────────────────────────────────────────────────────────────────────
+# Explainable Hybrid Recommendation System — Python dependencies
+# ──────────────────────────────────────────────────────────────────────
+
+# Core data stack
+numpy>=1.26,<2.0
+pandas>=2.0
+pyarrow>=14.0
+PyYAML>=6.0
+
+# Subsetting (gzip + json are stdlib, no extra deps)
+
+# ML / NLP / CF — Phase 1 & Phase 2
+scikit-learn>=1.5,<1.6
+scipy>=1.11
+xgboost>=2.0
+shap>=0.43
+
+# Visualization & Frontend Prototype
+matplotlib>=3.7
+plotly>=5.18
+streamlit>=1.32
+
+# Testing
+pytest>=7.0

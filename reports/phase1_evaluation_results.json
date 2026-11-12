@@ -1,0 +1,212 @@
+{
+  "num_evaluated_users": 500,
+  "num_excluded_users": 0,
+  "popularity_baseline_metrics": {
+    "precision@5": 0.0,
+    "recall@5": 0.0,
+    "ndcg@5": 0.0,
+    "precision@10": 0.0,
+    "recall@10": 0.0,
+    "ndcg@10": 0.0
+  },
+  "overall_metrics": {
+    "precision@5": 0.0036,
+    "recall@5": 0.018,
+    "ndcg@5": 0.012297424628754914,
+    "precision@10": 0.0022,
+    "recall@10": 0.022,
+    "ndcg@10": 0.013676505669637623
+  },
+  "global_shap_importance": {
+    "feature_similarity": 0.4359,
+    "brand_match": 0.3845,
+    "text_similarity": 0.2549,
+    "rating_similarity": 0.2437,
+    "category_similarity": 0.0559,
+    "price_similarity": 0.0146
+  },
+  "cold_start_breakdown": {
+    "group_a_seen_in_train": {
+      "count": 222,
+      "metrics": {
+        "precision@5": 0.0027027027027027033,
+        "recall@5": 0.013513513513513514,
+        "ndcg@5": 0.01126126126126126,
+        "precision@10": 0.0018018018018018018,
+        "recall@10": 0.018018018018018018,
+        "ndcg@10": 0.012762762762762763
+      }
+    },
+    "group_b_unseen_in_train": {
+      "count": 278,
+      "metrics": {
+        "precision@5": 0.004316546762589929,
+        "recall@5": 0.02158273381294964,
+        "ndcg@5": 0.013124864440206678,
+        "precision@10": 0.0025179856115107916,
+        "recall@10": 0.025179856115107913,
+        "ndcg@10": 0.014406185257142011
+      }
+    }
+  },
+  "worked_shap_examples": [
+    {
+      "user_id": "AE37Q6TCPNWG...",
+      "recommended_product": {
+        "product_id": "B093BP318W",
+        "title": "RAZERMIC MXR10 Camera Microphone, Professional External Shotgun Mic with Shock Mount and Deadcat Windscreen, Shotgun Video Microphone for iPhone, Android Smartphones, GoPro, Canon, Sony, Nikon",
+        "brand": "razermic",
+        "category": "Accessories",
+        "price": null
+      },
+      "predicted_score": 0.9727,
+      "features": {
+        "text_similarity": 0.2806,
+        "category_similarity": 0.5842,
+        "brand_match": 1.0,
+        "feature_similarity": 0.9957,
+        "price_similarity": 0.5,
+        "rating_similarity": 0.8443
+      },
+      "shap_values": {
+        "text_similarity": 0.2403,
+        "category_similarity": 0.054,
+        "brand_match": 0.3716,
+        "feature_similarity": 0.4304,
+        "price_similarity": -0.0015,
+        "rating_similarity": -0.1716
+      },
+      "top_positive_features": [
+        [
+          "feature_similarity",
+          0.4304
+        ],
+        [
+          "brand_match",
+          0.3716
+        ],
+        [
+          "text_similarity",
+          0.2403
+        ]
+      ],
+      "top_negative_features": [
+        [
+          "rating_similarity",
+          -0.1716
+        ],
+        [
+          "price_similarity",
+          -0.0015
+        ]
+      ],
+      "final_explanation": [
+        "Similar product features",
+        "Strong match with razermic products in your history",
+        "Similar to products you previously liked",
+        "Rating variance compared to your standard preferences"
+      ]
+    },
+    {
+      "user_id": "AE3LZ5EMSN5B...",
+      "recommended_product": {
+        "product_id": "B07JZ19WVS",
+        "title": "PERLESMITH Full Motion TV Wall Mount for 37-82 inch TVs up to 132 lbs, Max VESA 600x400mm, TV Bracket with Dual Articulating Arms, Tilt, Swivel, Extension, 16\" Wood Studs, PSLFK1",
+        "brand": "perlesmith",
+        "category": "Accessories",
+        "price": 56.99
+      },
+      "predicted_score": 0.9859,
+      "features": {
+        "text_similarity": 0.4598,
+        "category_similarity": 0.8413,
+        "brand_match": 1.0,
+        "feature_similarity": 1.0,
+        "price_similarity": 0.7689,
+        "rating_similarity": 0.9723
+      },
+      "shap_values": {
+        "text_similarity": 0.3214,
+        "category_similarity": 0.0514,
+        "brand_match": 0.4147,
+        "feature_similarity": 0.5104,
+        "price_similarity": 0.0245,
+        "rating_similarity": 0.2743
+      },
+      "top_positive_features": [
+        [
+          "feature_similarity",
+          0.5104
+        ],
+        [
+          "brand_match",
+          0.4147
+        ],
+        [
+          "text_similarity",
+          0.3214
+        ]
+      ],
+      "top_negative_features": [],
+      "final_explanation": [
+        "Similar product features",
+        "Strong match with perlesmith products in your history",
+        "Similar to products you previously liked",
+        "Highly rated by users with similar standards"
+      ]
+    },
+    {
+      "user_id": "AE3ORZRCEZPH...",
+      "recommended_product": {
+        "product_id": "B09MQK6PKR",
+        "title": "Bluetooth 5.1 Wireless Earbuds,DIGITNOW Deep Bass Sound 50H Playtime IPX8 Waterproof Earphones with Wireless Charging Case Microphone in-Ear Stereo Headphones Noise Cancelling for Sports (DT28)",
+        "brand": "digitnow",
+        "category": "Earbud Headphones",
+        "price": null
+      },
+      "predicted_score": 0.9799,
+      "features": {
+        "text_similarity": 0.3274,
+        "category_similarity": 0.3788,
+        "brand_match": 1.0,
+        "feature_similarity": 0.9478,
+        "price_similarity": 0.5,
+        "rating_similarity": 0.9
+      },
+      "shap_values": {
+        "text_similarity": 0.1804,
+        "category_similarity": 0.0584,
+        "brand_match": 0.41,
+        "feature_similarity": 0.4308,
+        "price_similarity": -0.0024,
+        "rating_similarity": 0.1603
+      },
+      "top_positive_features": [
+        [
+          "feature_similarity",
+          0.4308
+        ],
+        [
+          "brand_match",
+          0.41
+        ],
+        [
+          "text_similarity",
+          0.1804
+        ]
+      ],
+      "top_negative_features": [
+        [
+          "price_similarity",
+          -0.0024
+        ]
+      ],
+      "final_explanation": [
+        "Similar product features",
+        "Strong match with digitnow products in your history",
+        "Similar to products you previously liked",
+        "Highly rated by users with similar standards"
+      ]
+    }
+  ]
+}

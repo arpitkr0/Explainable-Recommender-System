@@ -1,0 +1,969 @@
+F I N A L Y E A R P R O J E C T   ·   T E A M L O G I C L O O P   ·   R E V. 3 — W I T H I M P L E M E N TAT I O N
+A M E N D M E N T S
+An Explainable Hybrid Recommendation
+System with Context and Influence-Aware
+Recommendations
+Final Implementation Specification — complete, build-ready design for all four
+phases: content-based filtering with SHAP explainability, collaborative filtering,
+context awareness, and a similarity-based influence engine.
+PREPARED FOR
+Arpit Kumar & Team LOGIC LOOP
+PROGRAMME
+B.Tech CSE (Data Science), Heritage Institute of Technology
+DATASET
+Amazon Reviews 2023 (McAuley Lab) — Electronics category
+SCOPE
+All 4 phases, implementation-realistic depth
+● THIS DOCUMENT IS THE ACTIVE BUILD SPEC
+LOGIC LOOP — Explainable Hybrid Recommendation System
+1
+CONTENTS
+Table of Contents
+OVERVIEW
+1. System Overview — Four Phases
+3
+2. Final System Architecture
+4
+DATA LAYER
+3. Phase 1 Architecture (Build First)
+5
+4. Data Layer — Product & Interaction Entities
+6
+5. Canonical Item ID — parent_asin
+6
+6. Dataset Subsetting & Large-File Ingestion
+7
+7. Data Processing Pipeline
+8
+8. Train / Test Split
+8
+PHASE 1 — CONTENT-BASED FILTERING + SHAP
+9. Product Content Representation
+9
+10. User Profile
+9
+11. Candidate Generation
+10
+12. Ranking Model & Features
+11
+13. SHAP Explainability
+12
+14. Explanation Engine & Data Structure
+13
+15. Worked Example — End to End
+14
+PHASE 2 — COLLABORATIVE FILTERING
+16. Collaborative Filtering Model
+15
+17. Hybrid Score Combination
+15
+PHASE 3 — CONTEXT AWARENESS
+18. Context Features & Scoring
+16
+PHASE 4 — INFLUENCE ENGINE
+19. Similarity-Based Influence Engine
+17
+EVALUATION & ENGINEERING
+20. Evaluation Plan
+18
+21. Project Structure
+19
+22. Configuration-Driven Design
+20
+23. The Recommendation API
+20
+24. Explicitly Out of Scope
+21
+BUILD PLAN
+LOGIC LOOP — Explainable Hybrid Recommendation System
+2
+25. Antigravity Build Sequence
+22
+LOGIC LOOP — Explainable Hybrid Recommendation System
+3
+SECTION 01
+System Overview — Four Phases
+The system is built in four phases, each adding one new source of recommendation evidence on top of the last.
+Every phase produces a working, demonstrable system on its own — the project does not depend on later phases
+to look complete.
+PHASE 1
+Content-Based Filtering + SHAP Explainability
+(TF-IDF + User Profile + Cosine Similarity + XGBoost + SHAP)
+        |
+        v
+PHASE 2
++ Collaborative Filtering
+(User-Item Matrix -> CF Score -> Hybrid Score)
+        |
+        v
+PHASE 3
++ Context Awareness
+(Time-derived features -> extended Hybrid Score)
+        |
+        v
+PHASE 4
++ Influence-Aware Explanation
+(Similarity-based attribution to past interactions)
+        |
+        v
+FINAL SYSTEM
+Explainable Hybrid Recommendation System
+with Context and Influence-Aware Recommendations
+Design principle: each phase adds evidence without discarding the previous phase's work. Phase 1's product
+representations, user profiles, and explanation framework remain in use all the way through Phase 4.
+LOGIC LOOP — Explainable Hybrid Recommendation System
+4
+SECTION 02
+Final System Architecture
+AMAZON ELECTRONICS
+        |
+        v
+  DATA PREPROCESSING
+    |           |
+    v           v
+PRODUCT      USER REVIEWS
+METADATA          |
+    |             v
+    v         USER HISTORY
+PRODUCT           |
+FEATURES          |
+    +------+------+
+           v
+   +---------------+
+   |    PHASE 1    |
+   | CONTENT MODEL |
+   +---------------+
+           |
+           v
+    Candidate Products  (top 100, by cosine similarity)
+           |
+           v
+     Ranking Features   (text/category/brand/feature/price/rating similarity)
+           |
+           v
+   XGBoost Ranking Model
+           |
+           v
+       SHAP Model
+           |
+           v
+    Explainable Results  (top 10, each with a "why recommended" explanation)
+           |
+   +---------------+
+   |    PHASE 2    |
+   v               |
+Collaborative Score |
+   +---------------+
+           v
+      HYBRID SCORE    (Score = αC + (1-α)CF)
+           |
+   +---------------+
+   |    PHASE 3    |
+   v               |
+  Context Score     |
+   +---------------+
+           v
+      FINAL RANKING   (Score = αC + βCF + γContext)
+           |
+   +------------------+
+   |      PHASE 4      |
+   |  INFLUENCE ENGINE  |
+   +------------------+
+           |
+           v
+    FINAL EXPLANATION
+   ("why recommended" + "what influenced it")
+           |
+           v
+    RECOMMENDATION UI
+LOGIC LOOP — Explainable Hybrid Recommendation System
+5
+SECTION 03
+Phase 1 Architecture (Build First)
+Before any of the later phases exist, Phase 1 is a complete, working recommender on its own — content-based
+filtering plus SHAP explainability, with nothing else plugged in yet. This is the first thing actually implemented.
+AMAZON ELECTRONICS
+        |
+        v
+  DATA PREPROCESSING
+    |           |
+    v           v
+PRODUCT      USER REVIEWS
+METADATA          |
+    |             v
+    v         USER HISTORY
+PRODUCT           |
+FEATURES          |
+    +------+------+
+           v
+   Content Candidate Generation
+     (cosine similarity against
+        user profile vector)
+           |
+           v
+      Candidate Set   (top 100)
+           |
+           v
+    Ranking Features
+  (text/category/brand/feature/
+       price/rating similarity)
+           |
+           v
+    XGBoost Ranking Model
+           |
+           v
+       Top 10 Products
+       |             |
+       v             v
+   SHAP Engine   Content Evidence
+       +------+------+
+              v
+      Explanation Engine
+              |
+              v
+    Explainable Recommendations
+No collaborative, context, or influence signal exists yet at this point — the Hybrid Score, Final Ranking, and Influence Engine boxes from the full
+system diagram (Section 2) are not active until Phases 2–4 are built on top of this. Phase 1 alone is still a complete, demoable system: it takes
+a user, returns ranked recommendations, and explains each one.
+LOGIC LOOP — Explainable Hybrid Recommendation System
+6
+SECTION 04
+Data Layer — Product & Interaction Entities
+Two entities anchor everything downstream: the product catalog and the interaction (review) history.
+Product (from Amazon metadata)
+parent_asin
+main_category
+title
+average_rating
+rating_number
+features
+description
+price
+store
+categories
+Interaction (from reviews)
+rating
+text
+asin
+parent_asin
+user_id
+timestamp
+verified_purchase
+Basic exploratory data analysis (EDA) is run on both before any modeling starts: rating distribution, reviews per
+user, reviews per item, and category spread. This does not need to be exhaustive — its job is to confirm the
+assumptions the pipeline depends on (e.g. that enough users clear the 20-rating threshold), not to produce a
+research-style data characterization.
+Canonical Item ID — parent_asin
+parent_asin is used as the canonical item ID throughout the system; the raw asin is retained only for display/
+reference.
+user_id -> parent_asin -> Product Catalog
+Variants such as different colors or sizes of the same product map to the same parent product. This keeps the
+catalog from fragmenting and keeps user interaction counts accurate — a user who bought the same headphones
+in two colors should count as one interaction with one product, not two.
+LOGIC LOOP — Explainable Hybrid Recommendation System
+7
+SECTION 06
+Dataset Subsetting & Large-File Ingestion
+The raw source is two large files:
+Electronics.jsonl        -> user reviews / interactions
+meta_Electronics.jsonl   -> product metadata
+Both are too large to load into pandas in one go. Both are read as streaming / line-by-line JSONL, never loaded
+whole into memory — this is a hard implementation requirement, not an optimization to consider later.
+Do not do this: randomly sample 1% of each file independently and join them. Two independent random samples will not overlap cleanly —
+the result is users with too little history, products with no interactions, broken user profiles, and a poor train/test split. Reviews determine the
+subset; metadata follows the reviews — never the other way round, and never sampled independently of each other.
+The actual procedure
+REVIEWS
+Electronics.jsonl
+        |
+    stream (line by line, never load whole file)
+        v
+   basic validation   (drop rows missing user_id / parent_asin / rating)
+        |
+        v
+  parent_asin canonicalization
+        |
+        v
+   count interactions per user
+        |
+        v
+  select users with >= min_ratings_per_user (20)
+        |
+        v
+     take up to max_users   (config value, Section 22)
+        |
+        v
+   retain ALL valid interactions for those selected users
+   (do not randomly sub-sample each user's history down to
+    a fixed count — keep what they actually have, since the
+    full chronological history is what the train/test split
+    in Section 8 depends on)
+        |
+        v
+   collect the resulting set of unique parent_asin values
+METADATA
+meta_Electronics.jsonl
+        |
+    stream (line by line)
+        v
+   keep metadata ONLY for parent_asin values collected above
+        |
+        v
+   FINAL PRODUCT CATALOG
+This produces two small, self-contained working files that every later phase reads from — nothing downstream
+needs to touch the original multi-gigabyte JSONL files again:
+LOGIC LOOP — Explainable Hybrid Recommendation System
+8
+data/processed/reviews_subset.parquet   (or .csv)
+data/processed/metadata_subset.parquet  (or .csv)
+This is fully compatible with the canonical-ID design in Section 5: parent_asin is what ties the two filtered files
+together, and the raw asin only needs to be carried along for display purposes.
+This subsetting step is the very first thing built and run — before TF-IDF, before the user profile, before anything else in Phase 1. Every later
+phase (candidate generation, ranking, collaborative filtering, context, influence) reads only from reviews_subset and 
+metadata_subset , never from the original two JSONL files directly.
+SECTION 07
+Data Processing Pipeline
+A light cleanup pass, run on the already-subsetted files produced in Section 6 — the heavy streaming/filtering
+work is done once, upstream, in Section 6, so this step stays simple:
+reviews_subset / metadata_subset
+    |
+    v
+Duplicate Removal
+    |
+    v
+Final Schema Check   (confirm no nulls in required fields survived subsetting)
+    |
+    v
+Train / Test Split
+LOGIC LOOP — Explainable Hybrid Recommendation System
+9
+SECTION 08
+Train / Test Split
+A basic train/test evaluation is used rather than a full train/validation/test protocol with repeated runs. For each
+user, interactions are sorted chronologically and split so that the most recent one or two interactions are held out
+as the test set:
+User A (chronological):
+2023 - Product A
+2023 - Product B
+2024 - Product C
+2024 - Product D
+TRAIN:  A, B, C
+TEST:   D
+The one rule that must hold regardless of how simple the rest of the split is: the user profile used to generate a test-set
+recommendation must only be built from interactions that happened before that test interaction. This prevents temporal
+leakage and is essentially free to enforce, so it stays in the pipeline even though the rest of the evaluation is kept
+lightweight.
+This is stated here as an explicit, hard implementation constraint — not just a principle to keep in mind, but a
+fixed sequence the code must follow, every time:
+TRAIN HISTORY
+     |
+     v
+Build user profile
+     |
+     v
+Generate candidates
+     |
+     v
+Rank candidates
+     |
+     v
+Evaluate against TEST
+Never build the user profile from TRAIN + TEST combined. If the test item's rating leaks into the profile used to score it, precision/recall/NDCG
+numbers become meaningless — this is the single most common correctness bug in a recommender-system implementation, and it is worth a
+dedicated unit test that asserts no test-set parent_asin ever appears in the interactions used to build a profile.
+LOGIC LOOP — Explainable Hybrid Recommendation System
+10
+SECTION 09 — PHASE 1
+Product Content Representation
+Each product is represented using a single combined textual field rather than several separately-weighted views.
+The fields used are:
+title
+features
+description
+categories
+brand (extracted from `details` or `store` where available)
+These are concatenated into one text string per product:
+combined_text = title + " " + features + " " + description + " " + categories + " " + brand
+and vectorized with TF-IDF:
+combined_text
+      |
+      v
+Text preprocessing   (lowercase, strip punctuation, remove stopwords)
+      |
+      v
+   TF-IDF vector   (product vector, V_i)
+This single-vector approach is deliberately simpler than a multi-view fusion — it is fast to compute, easy to
+explain in a report, and sufficient for the ranking model to work with, since the ranking model (Section 12) is
+what ultimately learns which parts of the similarity matter.
+LOGIC LOOP — Explainable Hybrid Recommendation System
+11
+SECTION 10 — PHASE 1
+User Profile
+A user's profile is a single vector: the rating-weighted average of the product vectors for everything they have
+rated.
+User history
+     |
+     v
+Retrieve product vectors for all rated items
+     |
+     v
+Weight each by rating
+     |
+     v
+Weighted average
+     |
+     v
+User profile vector (P_u)
+Rating-to-weight mapping — deliberately kept non-negative, since averaging in negative-weighted vectors into a
+TF-IDF profile produces unstable, hard-to-interpret cosine similarities:
+Rating
+Weight
+5 stars
+1.0
+4 stars
+0.75
+3 stars
+0 (excluded from the profile average)
+1–2 stars
+Excluded from the positive profile entirely
+Low ratings are not discarded from the system — they remain available as a ranking feature later (Section 12) —
+they are simply kept out of the positive preference vector itself, so that vector stays a clean, non-negative average.
+This is a deliberate simplification for the first implementation; negative-preference modeling can be revisited
+later if time allows.
+The exact weight values can be adjusted with a small amount of manual tuning once real rating distributions are
+visible — no formal hyperparameter search is needed for this.
+Cold-start handling
+A user with no rating history yet cannot have a profile vector built for them — there is nothing to average. This
+must be handled explicitly rather than left to fail silently:
+If user has rating history:
+    Use the personalized content-based recommender (as above)
+Else:
+    Fall back to popularity-based recommendations
+    (highest-rated, most-reviewed products, spread across categories
+     for some variety)
+No sophisticated cold-start model is needed — the fallback above is enough to keep the system from breaking on
+a new user, and it is a question that is very likely to come up when the system is demonstrated or evaluated.
+LOGIC LOOP — Explainable Hybrid Recommendation System
+12
+SECTION 11 — PHASE 1
+Candidate Generation
+The ranking model should not score every product in the catalog for every user, so a cheap similarity step
+narrows the field first:
+User profile vector
+        |
+        v
+Cosine similarity against all product vectors
+        |
+        v
+   Top 100 candidates
+        |
+        v
+Remove products the user has already interacted with
+        |
+        v
+    Ranking model
+        |
+        v
+   Top 10 recommendations   (diversity rule applied)
+At the project's sampled scale (a filtered item catalog restricted to what the sampled power users have rated), this
+is cheap enough to compute directly with no approximate nearest-neighbour infrastructure needed.
+Removing already-interacted products is an explicit, required step, not an implementation detail to leave implicit — without it, the system can
+recommend a user a product they have already rated, which looks broken in a demo even though the underlying model is working correctly.
+Diversity in the final Top-K
+Without a diversity rule, a high-scoring brand or category can dominate the entire recommendation list — five
+near-identical pairs of the same headphones, for example, even if each one individually scores well. A simple cap
+avoids this:
+Do not allow more than N recommendations from the same brand
+(or the same category) in the final Top-K.
+e.g. N = 2 out of Top-10
+This is a lightweight post-processing step applied after ranking, not a change to the model itself, and it noticeably
+improves how the recommendations look in a demo.
+LOGIC LOOP — Explainable Hybrid Recommendation System
+13
+SECTION 12 — PHASE 1
+Ranking Model & Features
+Rather than trying to explain a raw similarity number, the top-100 candidates are re-scored with a small ranking
+model trained on interpretable user-item features:
+text_similarity        (cosine similarity between user profile and product vector)
+category_similarity    (overlap between user's preferred categories and the product's)
+brand_match             (1 if the product's brand matches a brand the user has rated highly)
+feature_similarity      (overlap between the product's feature list and the user's history)
+price_similarity        (closeness of the product's price to the user's typical price range)
+rating_similarity       (closeness of the product's average rating to ratings the user tends to give)
+These six features are computed for every (user, candidate) pair and fed into a single classifier:
+Feature vector
+      |
+      v
+ XGBoost classifier
+      |
+      v
+ P(user likes item)
+The target label is derived from the rating, with a clear, explicit sampling rule so that "training example" is never
+ambiguous when the pipeline is implemented:
+For each training user:
+Positive examples  = products rated >= 4
+Negative examples  = products rated <= 2
+Ignored            = products rated == 3   (ambiguous, excluded from training)
+A middling 3-star rating is genuinely ambiguous — it does not cleanly indicate "liked" or "disliked" — so it is
+left out of the classifier's training data entirely rather than forced into either class. This keeps the training labels
+clean and produces more balanced, more reliable training data than including every rated product. One model is
+trained for the whole system — not one model per user — so there is a single model to tune and a single SHAP
+explainer to maintain.
+Small manual tuning (adjusting tree depth, learning rate, and number of estimators by hand, checking validation
+performance) is sufficient; no automated hyperparameter search is required.
+LOGIC LOOP — Explainable Hybrid Recommendation System
+14
+SECTION 13 — PHASE 1
+SHAP Explainability
+SHAP explains the ranking model's predictions — not the whole pipeline, and not the similarity score directly.
+User + Candidate
+       |
+       v
+  Feature Vector
+       |
+       v
+ XGBoost Model
+       |
+       v
+ Predicted Score
+       |
+       v
+ SHAP TreeExplainer
+       |
+       v
+ Per-feature contribution to this prediction
+Local explanation
+For one recommendation, SHAP returns a contribution value per feature — how much each feature pushed the
+prediction up or down for this specific user-item pair. This is the explanation shown to the end user for that
+recommendation.
+Global explanation
+SHAP values are also aggregated across many recommendations to answer a broader question: what does the
+recommender rely on overall? This produces a simple, reportable global feature-importance ranking (e.g. "brand
+match and category similarity are, on average, the strongest drivers of recommendations in this system") —
+useful for the final report without requiring a formal explanation-fidelity metric.
+LOGIC LOOP — Explainable Hybrid Recommendation System
+15
+SECTION 14 — PHASE 1
+Explanation Engine & Data Structure
+SHAP values alone are not a good end-user interface, so a small rule-based Explanation Engine converts them
+into plain-language sentences. This is template-based, not LLM-generated, so the explanation text is deterministic
+and always traceable back to a specific SHAP value.
+Input:  SHAP results + user profile + product metadata
+Output: a ranked list of plain-language reasons, e.g.
+  "Similar to products you previously liked"
+  "Matches your preferred category"
+  "Strong match with [brand] products in your history"
+  "Similar product features"
+Every recommendation is stored with a lightweight structured record so the explanation can be reconstructed and
+displayed later without recomputation:
+Recommendation
+  |-- user_id
+  |-- parent_asin
+  |-- recommendation_score
+  |-- rank
+  `-- explanation
+        |-- feature
+        |-- shap_value
+        |-- direction
+        `-- evidence   (the plain-language sentence)
+LOGIC LOOP — Explainable Hybrid Recommendation System
+16
+SECTION 15 — PHASE 1
+Worked Example — End to End
+Suppose the system recommends the Sony WH-1000XM5 to a user with a history of Sony audio products.
+Step 1 — Candidate generation: the product appears in the top 100 by cosine similarity to the user's profile
+vector.
+Step 2 — Ranking: the XGBoost model scores the (user, product) pair highly.
+Step 3 — SHAP:
+Feature
+Contribution
+brand_match
++0.24
+category_similarity
++0.19
+text_similarity
++0.16
+feature_similarity
++0.13
+price_similarity
++0.04
+Step 4 — Explanation Engine output, shown in the UI:
+Why this was recommended 
+Similar to products you previously liked
+Matches your preferred category
+Strong match with Sony products in your history
+Similar product features
+with the underlying SHAP contribution bar chart shown beneath it for anyone who wants the numeric detail.
+• 
+• 
+• 
+• 
+LOGIC LOOP — Explainable Hybrid Recommendation System
+17
+SECTION 16 — PHASE 2
+Collaborative Filtering Model
+A straightforward collaborative signal is added on top of Phase 1, built from the user-item ratings matrix:
+User-Item Matrix -> Collaborative Model -> CF Score
+Option
+Description
+Item-item collaborative
+filtering
+Recommend items similar to what the user has rated highly, based on co-rating patterns across users
+Matrix factorization
+Preferred approach if implementation time allows — learns latent user and item factors from the ratings matrix (e.g. via a
+standard SVD-based library)
+No complex or research-oriented matrix-factorization variant is required — a standard, well-supported library
+implementation is sufficient and appropriate for this project.
+SECTION 17 — PHASE 2
+Hybrid Score Combination
+The content score (C, from Phase 1) and the collaborative score (CF, from Phase 2) are combined with a simple
+weighted sum — no learned combiner or neural hybrid layer is needed:
+Score = αC + (1−α)CF
+α is a single tunable weight between 0 and 1, set by hand after comparing recommendation quality at a few values
+(e.g. 0.3, 0.5, 0.7) — this is the "2–3 simple comparisons" referenced in the evaluation plan, not a formal
+hyperparameter search.
+LOGIC LOOP — Explainable Hybrid Recommendation System
+18
+SECTION 18 — PHASE 3
+Context Features & Scoring
+Context features are derived directly from the existing timestamp field already present in the review data — no
+new data source is required:
+hour
+day_of_week
+month
+recency   (time since the user's last interaction)
+Rather than leaving the context signal as a vague "preference," it is defined concretely as a per-user, per-context
+category preference distribution, computed once from training history:
+For each user, for each context bucket (e.g. time-of-day):
+  P(category | context) = fraction of that user's interactions,
+                            within that context bucket, that fall
+                            into each product category
+Worked example:
+User U, Evening interactions:
+  Audio        0.60
+  Accessories  0.25
+  Computers    0.15
+Then, for a candidate product:
+ContextScore(user, item) = P(item.category | current context)
+i.e. how well the candidate's category matches what this user tends to engage with in the current context, based on
+their own history. This is folded into the final score:
+Score = αC + βCF + γContext
+No sequence model, transformer, or contextual bandit is required. β and γ are set the same way as α above — by
+hand, comparing a small number of settings.
+This phase's measured effect on the evaluation metrics may be small, since electronics purchases don't reliably follow strong time-of-day
+patterns. That is an acceptable, reportable outcome — the architecture is still correct and extensible even if the numeric lift from context is
+modest on this particular dataset.
+LOGIC LOOP — Explainable Hybrid Recommendation System
+19
+SECTION 19 — PHASE 4
+Similarity-Based Influence Engine
+The final phase answers: which of the user's past interactions contributed most to this recommendation? It is
+named and described deliberately as a similarity-based mechanism, not an "Influence Engine" in the causal
+sense — for each recommended item, its similarity to each of the user's past interacted items is computed, and the
+most similar past items are surfaced as the top contributors.
+How to answer the obvious viva question: if asked "how do you prove that this past item caused the recommendation?", the honest answer
+is that causation is never claimed — the system estimates similarity-based contribution from historical interactions, which is a well-defined,
+defensible thing to compute and present, and is explicitly not a causal claim. Naming the mechanism accurately here is what makes that answer
+straightforward rather than awkward.
+User history
+     |
+     v
+Similarity between recommendation and each past item
+     |
+     v
+Rank past items by similarity
+     |
+     v
+Influence score per past item
+Example — recommending a MacBook accessory to a user with a history of Apple-ecosystem purchases:
+Recommendation: MacBook Stand
+     |
+     +-- Previous: Logitech MX Master 3   -> influence 0.82
+     +-- Previous: Mechanical Keyboard     -> influence 0.64
+     +-- Previous: Laptop Stand (older)    -> influence 0.43
+Shown in the UI as:
+What influenced this recommendation? 
+Logitech MX Master 3 — 0.82
+Mechanical Keyboard — 0.64
+Laptop Stand — 0.43
+This gives the project a strong closing demonstration — a recommendation the user can trace back to specific
+past purchases — for comparatively little implementation cost, since it reuses the similarity computation already
+built for Phase 1.
+• 
+• 
+• 
+LOGIC LOOP — Explainable Hybrid Recommendation System
+20
+SECTION 20
+Evaluation Plan
+Recommendation quality
+Precision@5    Recall@5    NDCG@5
+Precision@10   Recall@10   NDCG@10
+computed on the held-out test interactions per user, following the temporal split from Section 8.
+Simple comparisons
+Rather than a full ablation study, 2–3 straightforward comparisons are enough to show each phase adds value:
+Comparison
+Shows
+Popularity baseline vs. Phase 1 (content + SHAP)
+Content-based personalization beats simply recommending popular items
+Phase 1 alone vs. Phase 1 + Phase 2 (hybrid)
+Collaborative filtering adds measurable value on top of content
+Hybrid vs. Hybrid + Context (Phase 3)
+Whether context meaningfully improves ranking on this dataset
+Phase 4 (the influence engine) is deliberately left out of this comparison table — it is an explanation component, not a recommendation-quality
+component, and it is not expected to move Precision/Recall/NDCG. Its value is demonstrated qualitatively (as in Section 15 and Section 19's
+worked examples), not through a ranking-metric comparison.
+Explainability evaluation
+Kept qualitative rather than formalized into a fidelity metric: a handful of worked examples (as in Section 15) are
+presented in the report and demo, showing the SHAP contributions and the resulting plain-language explanation
+side by side. This is sufficient to demonstrate that the explanations are grounded in the model's actual reasoning,
+without requiring a feature-removal fidelity experiment or a human-subject survey.
+LOGIC LOOP — Explainable Hybrid Recommendation System
+21
+SECTION 21
+Project Structure
+explainable-recommender/
+|
+├── data/
+|   ├── raw/
+|   ├── processed/
+|   └── splits/
+|
+├── notebooks/
+|   ├── 01_data_exploration.ipynb
+|   ├── 02_preprocessing.ipynb
+|   ├── 03_content_model.ipynb
+|   ├── 04_ranking_and_shap.ipynb
+|   ├── 05_collaborative_filtering.ipynb
+|   ├── 06_context_features.ipynb
+|   ├── 07_influence_engine.ipynb
+|   └── 08_evaluation.ipynb
+|
+├── src/
+|   ├── data/
+|   |   ├── loader.py
+|   |   ├── cleaner.py
+|   |   └── splitter.py
+|   |
+|   ├── content/
+|   |   ├── text_features.py
+|   |   └── user_profile.py
+|   |
+|   ├── ranking/
+|   |   ├── features.py
+|   |   └── ranker.py
+|   |
+|   ├── explainability/
+|   |   ├── shap_explainer.py
+|   |   └── explanation_generator.py
+|   |
+|   ├── collaborative/
+|   |   └── cf_model.py
+|   |
+|   ├── context/
+|   |   └── context_features.py
+|   |
+|   ├── influence/
+|   |   └── influence_engine.py
+|   |
+|   ├── evaluation/
+|   |   └── ranking_metrics.py
+|   |
+|   └── pipeline/
+|       └── recommender.py
+|
+├── models/
+├── configs/
+|   └── config.yaml
+├── requirements.txt
+└── README.md
+This structure is kept even though it mirrors good practice from the research-oriented version — it costs nothing
+extra to organize the code this way, and it makes the four-phase progression easy to walk through in a demo or
+viva.
+LOGIC LOOP — Explainable Hybrid Recommendation System
+22
+SECTION 22
+Configuration-Driven Design
+config.yaml
+dataset:
+  category: Electronics
+  min_ratings_per_user: 20
+  max_users: 500          # configurable — see note below
+retrieval:
+  candidate_count: 100
+  top_k: 10
+  diversity_cap_per_brand: 2   # max items from same brand in final top_k
+ranking:
+  model: xgboost
+  positive_rating_threshold: 4
+  negative_rating_threshold: 2   # ratings strictly between these two are ignored
+hybrid:
+  alpha: 0.5   # content vs collaborative weight
+  beta: 0.3    # collaborative weight in 3-way score
+  gamma: 0.2   # context weight in 3-way score
+Keeping these values in one config file rather than scattered through the code makes the manual tuning described
+in Sections 11, 16, and 17 easy to do and easy to record in the report.
+max_users is deliberately a configuration value, not a fixed constant baked into the code. Start development at 500 users to get the full
+pipeline working end to end quickly; once it runs correctly, this can be raised to a more substantial 2,000–10,000 users for the final evaluation
+and demo, depending on runtime and memory once real profiling data is available. The pipeline logic does not change between these two
+settings — only the config value does.
+LOGIC LOOP — Explainable Hybrid Recommendation System
+23
+SECTION 23
+The Recommendation API
+The core pipeline is designed around one function, used consistently across notebooks, evaluation code, and (if
+time allows) a demo UI:
+recommend(user_id, k)
+returning:
+[
+  {
+    "product_id": ...,
+    "title": ...,
+    "brand": ...,
+    "category": ...,
+    "price": ...,
+    "score": 0.87,
+    "rank": 1,
+    "explanation": [...],
+    "shap_values": [...],
+    "influenced_by": [...]
+  },
+  ...
+]
+title , brand , category , and price are included directly in the response so that a demo UI never has to make a
+second lookup just to display a recommendation card. explanation and shap_values are populated from Phase 1
+onward (the plain-language sentences and their underlying numeric contributions, respectively); influenced_by is
+populated once Phase 4 is built. Earlier phases simply leave that field empty, so the output contract never has to
+change as later phases are added.
+SECTION 24
+Explicitly Out of Scope
+Deep learning / neural recommenders (embeddings, autoencoders, transformer-based sequence models)
+Extensive ablation studies (20+ experiments, 10+ baselines)
+Statistical significance testing
+Mean ± standard deviation across repeated experimental runs
+Formal explanation-fidelity metrics
+Large-scale human user study
+Automated hyperparameter optimization
+Multiple datasets / cross-dataset evaluation
+Publication-grade experimental rigor
+None of these are needed to satisfy the project's actual goal: a working system, a sound and explainable
+architecture, reasonable evaluation, a genuine explainability mechanism, and a clear four-phase progression from
+content-based filtering through to an influence-aware hybrid recommender.
+• 
+• 
+• 
+• 
+• 
+• 
+• 
+• 
+• 
+LOGIC LOOP — Explainable Hybrid Recommendation System
+24
+LOGIC LOOP — Explainable Hybrid Recommendation System
+25
+SECTION 25 — BUILD PLAN
+Antigravity Build Sequence
+This document is the master specification — but it should not be handed to an agentic coding tool as a single
+"build this" instruction. Asked to implement all 26 sections at once, an agentic tool is likely to produce a large,
+under-tested codebase with an unclear data pipeline and broken dependencies between phases. Instead, it is built
+incrementally, one prompt per stage, testing the output before moving to the next. Each prompt below references
+this document as the shared source of truth, and each one deliberately restricts scope so the tool does not run
+ahead into later phases.
+Prompt 1 — Dataset subsetting (build this before anything else)
+Read the attached implementation specification (this document).
+Do NOT implement the recommender yet. Do NOT implement project
+scaffolding beyond what's needed for this step yet.
+Implement ONLY Section 6 (Dataset Subsetting & Large-File
+Ingestion):
+- stream Electronics.jsonl line by line (never load the whole
+  file into memory)
+- select users with >= min_ratings_per_user, up to max_users
+  (from config.yaml, Section 22)
+- retain ALL valid interactions for those selected users (do not
+  sub-sample each user's history)
+- collect the resulting unique parent_asin values
+- stream meta_Electronics.jsonl line by line and retain metadata
+  only for those parent_asin values
+- write the two results to data/processed/reviews_subset.parquet
+  and data/processed/metadata_subset.parquet
+Add a test that confirms: every parent_asin in reviews_subset
+exists in metadata_subset, and every user in reviews_subset has
+at least min_ratings_per_user interactions.
+Verify: both output files exist, are small enough to load into pandas directly, and the test above passes, before
+moving on. Everything from Prompt 2 onward reads only from these two files — never from the original JSONL
+files again.
+Prompt 2 — Project scaffolding
+Read the attached implementation specification (this document).
+Do NOT implement the recommender yet.
+Set up the project structure and environment exactly according to
+Section 21 (Project Structure) and Section 22 (Configuration-Driven
+Design).
+Implement only:
+- project folders (as listed in Section 21)
+- config.yaml (as specified in Section 22)
+- the data loader (Section 5: parent_asin canonicalization,
+  Section 7: duplicate removal / final schema check, reading from
+  the reviews_subset / metadata_subset files produced in Prompt 1)
+- basic logging
+- requirements.txt
+- a few basic tests confirming the config loads and the data
+  loader runs on the subsetted files without errors
+LOGIC LOOP — Explainable Hybrid Recommendation System
+26
+Do not implement Phase 1-4 recommendation logic yet.
+Verify: the project structure matches Section 21, config.yaml loads correctly, and the data loader runs end to end
+on the subsetted data without errors, before moving on.
+Prompt 3 — Phase 1: content representation & user profile
+Using the same specification, implement Section 9 (Product Content
+Representation) and Section 10 (User Profile), including the
+non-negative weighting scheme and the cold-start fallback.
+Do not implement candidate generation, ranking, or SHAP yet.
+Add tests confirming: every product gets a TF-IDF vector, every
+user with rating history gets a profile vector, and a user with
+no history correctly falls back to the popularity-based path
+instead of erroring.
+Prompt 4 — Phase 1: candidate generation, ranking, SHAP
+Implement Section 11 (Candidate Generation, including the
+already-interacted filter and the diversity cap) and Section 12
+(Ranking Model & Features, including the explicit positive/
+negative/ignored labeling rule).
+Then implement Section 13 (SHAP Explainability) and Section 14
+(Explanation Engine).
+Enforce the hard constraint from Section 8: the user profile used
+to score a test-set recommendation must never include the held-out
+test interaction. Add a test that explicitly checks this.
+At the end of this prompt, `recommend(user_id, k)` should return
+real, explained recommendations using Phase 1 only.
+Verify: run the worked example from Section 15 end to end and confirm the SHAP contributions and explanation
+text look reasonable before proceeding.
+Prompt 5 — Phase 2: collaborative filtering
+Implement Section 16 (Collaborative Filtering Model) and Section 17
+(Hybrid Score Combination). Phase 1 code should not need to change
+— Phase 2 adds a CF score and combines it with the existing content
+score via the alpha-weighted formula in Section 17.
+Do not implement Phase 3 or Phase 4 yet.
+Prompt 6 — Phase 3: context features
+Implement Section 18 (Context Features & Scoring), including the
+concrete P(category | context) formulation. Extend the hybrid score
+to the three-way formula (alpha*C + beta*CF + gamma*Context) without
+modifying Phase 1 or Phase 2 code.
+LOGIC LOOP — Explainable Hybrid Recommendation System
+27
+Prompt 7 — Phase 4: similarity-based influence engine
+Implement Section 19 (Similarity-Based Influence Engine). Populate
+the `influenced_by` field in the API response from Section 23.
+Reuse the similarity computation already built in Phase 1 rather
+than building a new one.
+Prompt 8 — Evaluation
+Implement Section 20 (Evaluation Plan): Precision/Recall/NDCG@5
+and @10, the three simple phase-by-phase comparisons, and a small
+set of worked SHAP examples for the report. Do not implement
+statistical significance testing, ablation studies beyond the
+three listed comparisons, or any human-subject evaluation —
+these are explicitly out of scope (Section 24).
+Working loop for the rest of the build: give Antigravity one prompt above, review what it produces (or the error it hits) against this document,
+then give the next prompt — or a corrective one — based on what actually happened. This keeps the four-phase structure intact and makes it
+far easier to isolate a bug to a single phase, rather than debugging one large generated codebase all at once.
+LOGIC LOOP — Explainable Hybrid Recommendation System
+28

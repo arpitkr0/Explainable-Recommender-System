@@ -1,0 +1,36 @@
+# ──────────────────────────────────────────────────────────────────────
+# Explainable Hybrid Recommendation System — master configuration
+# Section 22 of the implementation specification
+# ──────────────────────────────────────────────────────────────────────
+
+dataset:
+  category: Electronics
+  min_ratings_per_user: 20
+  max_users: 500                   # start small; raise to 2k–10k for final eval
+
+retrieval:
+  candidate_count: 100
+  top_k: 10
+  diversity_cap_per_brand: 2       # max items from same brand in final top_k
+
+ranking:
+  model: xgboost
+  positive_rating_threshold: 4
+  negative_rating_threshold: 2     # ratings strictly between these two are ignored
+
+hybrid:
+  alpha: 0.5                       # content vs collaborative weight
+  beta: 0.3                        # collaborative weight in 3-way score
+  gamma: 0.2                       # context weight in 3-way score
+
+content:
+  max_features: 10000              # TF-IDF vocabulary cap
+  min_df: 2                        # ignore terms appearing in fewer than 2 items
+  recency_decay: 0.85              # exponential decay per chronological interaction rank (1.0 = uniform)
+  rating_weights:
+    5: 1.0                         # 5 stars -> 1.0
+    4: 0.75                        # 4 stars -> 0.75
+    3: 0.0                         # 3 stars -> excluded (0.0)
+    2: 0.0                         # 1-2 stars -> excluded (0.0)
+    1: 0.0
+
