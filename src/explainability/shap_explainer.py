@@ -17,6 +17,31 @@ from src.ranking.features import FEATURE_NAMES
 
 log = logging.getLogger(__name__)
 
+# Compatibility patch for SHAP + newer XGBoost versions where learner_model_param["base_score"]
+# is formatted as a bracketed string like '[8.499291E-1]'.
+try:
+    import shap.explainers._tree as _shap_tree
+
+    if hasattr(_shap_tree, "decode_ubjson_buffer"):
+        _orig_decode_ubjson_buffer = _shap_tree.decode_ubjson_buffer
+
+        def _safe_decode_ubjson_buffer(fd):
+            jmodel = _orig_decode_ubjson_buffer(fd)
+            try:
+                lmp = jmodel.get("learner", {}).get("learner_model_param", {})
+                if "base_score" in lmp:
+                    bs = str(lmp["base_score"]).strip()
+                    if bs.startswith("[") and bs.endswith("]"):
+                        lmp["base_score"] = bs[1:-1].strip()
+            except Exception:
+                pass
+            return jmodel
+
+        _shap_tree.decode_ubjson_buffer = _safe_decode_ubjson_buffer
+except Exception as _patch_err:
+    log.debug("SHAP UBJSON compatibility patch skipped: %s", _patch_err)
+
+
 
 class ShapExplainer:
     """Explains XGBoost ranking predictions via SHAP TreeExplainer."""
