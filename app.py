@@ -272,24 +272,74 @@ def main():
         col4.metric("Blend α", f"{alpha:.2f}" if is_phase2 else "1.00 (Content)")
 
         if not is_cold:
-            with st.expander("View User's Recent Purchase History (Basis for Profile & Explanations)", expanded=True):
+            user_pos_revs = user_hist[user_hist["rating"] >= 4.0]
+            preferred_brands_list = []
+            for asin in user_pos_revs["parent_asin"]:
+                b = meta_lookup.get(str(asin), {}).get("brand")
+                if b and b.strip() and b.title() not in preferred_brands_list:
+                    preferred_brands_list.append(b.title())
+
+            with st.expander(
+                f"View User Purchase History ({len(user_hist)} total reviews across {len(preferred_brands_list)} preferred brands)",
+                expanded=True,
+            ):
+                if preferred_brands_list:
+                    st.caption(
+                        f"**Brands rated 4–5★ across full history ({len(preferred_brands_list)} total):** "
+                        + ", ".join(preferred_brands_list[:12])
+                        + (f", and {len(preferred_brands_list) - 12} more..." if len(preferred_brands_list) > 12 else "")
+                    )
+
+                hist_col1, hist_col2 = st.columns([1, 2])
+                with hist_col1:
+                    history_limit = st.selectbox(
+                        "Display count",
+                        options=[8, 20, 50, len(user_hist)],
+                        format_func=lambda x: f"Recent {x} reviews" if x < len(user_hist) else f"All {x} reviews",
+                        index=0,
+                        key="hist_limit_select",
+                    )
+                with hist_col2:
+                    brand_search = st.text_input(
+                        "Search user's past purchases by brand or title",
+                        placeholder="e.g. Samsung, Amazon Basics...",
+                        key="hist_search_input",
+                    )
+
+                displayed_hist = user_hist
+                if brand_search.strip():
+                    search_term = brand_search.strip().lower()
+                    displayed_hist = user_hist[
+                        user_hist["parent_asin"].apply(
+                            lambda a: search_term in str(meta_lookup.get(str(a), {}).get("brand", "")).lower()
+                            or search_term in str(meta_lookup.get(str(a), {}).get("title", "")).lower()
+                            or search_term in str(a).lower()
+                        )
+                    ]
+                else:
+                    displayed_hist = user_hist.head(history_limit)
+
                 recent_rows = []
-                for _, row in user_hist.head(8).iterrows():
+                for _, row in displayed_hist.iterrows():
                     m = meta_lookup.get(str(row["parent_asin"]), {})
                     price_val = m.get("price")
                     cats = m.get("categories", ())
                     cat_str = sorted(cats)[0].title() if cats else "Electronics"
+                    b_str = m.get("brand") or "—"
                     recent_rows.append(
                         {
                             "Product ID": row["parent_asin"],
                             "Title": str(m.get("title", "Unknown"))[:80],
-                            "Brand": m.get("brand") or "—",
+                            "Brand": b_str.title() if b_str != "—" else "—",
                             "Category": cat_str,
                             "User Rating": f"{row['rating']:.1f} ★",
                             "Price": f"${price_val:.2f}" if pd.notna(price_val) else "—",
                         }
                     )
-                st.dataframe(pd.DataFrame(recent_rows), use_container_width=True, hide_index=True)
+                if recent_rows:
+                    st.dataframe(pd.DataFrame(recent_rows), use_container_width=True, hide_index=True)
+                else:
+                    st.info(f"No purchases found matching '{brand_search}'.")
 
         # Generate Recommendations
         if is_phase2:
