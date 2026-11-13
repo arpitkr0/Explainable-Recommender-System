@@ -251,11 +251,10 @@ def main():
         )
 
     # ── Main Tabs ───────────────────────────────────────────────────
-    tab_live, tab_eval, tab_arch = st.tabs(
+    tab_live, tab_eval = st.tabs(
         [
             "🔍 Live Recommendations & SHAP Proof",
             "📊 Global Explainability & Evaluation",
-            "🏗️ System Architecture",
         ]
     )
 
@@ -299,15 +298,15 @@ def main():
                         + (f", and {len(preferred_brands_list) - 12} more..." if len(preferred_brands_list) > 12 else "")
                     )
 
-                f_col1, f_col2, f_col3 = st.columns([1, 1.2, 1.8])
+                f_col1, f_col2, f_col3 = st.columns([1.2, 1.2, 1.6])
                 with f_col1:
-                    opts = sorted(list({8, 20, 50, len(user_hist)}))
-                    history_limit = st.selectbox(
-                        "Display Limit",
-                        options=opts,
-                        format_func=lambda x: f"Recent {x}" if x < len(user_hist) else f"All {x}",
-                        index=0,
-                        key="hist_limit_select",
+                    star_filter = st.multiselect(
+                        "Filter by Stars",
+                        options=[5, 4, 3, 2, 1],
+                        default=[5, 4, 3, 2, 1],
+                        format_func=lambda s: f"{s} ★",
+                        key="hist_stars_select",
+                        help="Filter purchase history by star ratings (e.g. select 4★ and 5★)",
                     )
                 with f_col2:
                     brand_filter = st.selectbox(
@@ -325,7 +324,16 @@ def main():
 
                 displayed_hist = user_hist
 
-                # 1. Apply Brand Filter Dropdown
+                # 1. Filter by Stars (if user unselects all, show none; otherwise match selected stars)
+                if star_filter:
+                    allowed_stars = set(star_filter)
+                    displayed_hist = displayed_hist[
+                        displayed_hist["rating"].apply(lambda r: int(round(float(r))) in allowed_stars)
+                    ]
+                else:
+                    displayed_hist = displayed_hist.iloc[0:0]
+
+                # 2. Filter by Brand Dropdown
                 if brand_filter != "All Brands":
                     sel_b = brand_filter.rsplit(" (", 1)[0].lower()
                     displayed_hist = displayed_hist[
@@ -334,7 +342,7 @@ def main():
                         )
                     ]
 
-                # 2. Apply Text Keyword Search (splits terms and matches all tokens)
+                # 3. Filter by Text Keyword Search (splits terms and matches all tokens)
                 if hist_search.strip():
                     tokens = hist_search.strip().lower().split()
                     displayed_hist = displayed_hist[
@@ -347,10 +355,6 @@ def main():
                             )
                         )
                     ]
-
-                # If no filters active, limit to top N
-                if brand_filter == "All Brands" and not hist_search.strip():
-                    displayed_hist = displayed_hist.head(history_limit)
 
                 st.caption(f"Showing **{len(displayed_hist)}** purchases from this user's history:")
 
@@ -561,24 +565,6 @@ def main():
                     st.caption(
                         "55.6% of test items had zero prior training interactions. Content-Based Phase 1 still retrieves and explains these cold-start items, while Collaborative Filtering adds signal for seen items."
                     )
-
-    with tab_arch:
-        st.subheader("System Architecture (Phases 1 & 2 Active)")
-        st.markdown(
-            """
-            1. **Data Layer (Sections 5–8)**: Streaming ingestion of Amazon Electronics (`parent_asin` canonicalization), duplicate removal, and strict chronological Leave-One-Out splitting with verified zero temporal leakage.
-            2. **Phase 1 — Content Representation & Candidate Generation (Sections 9–11)**:
-               - Combined `title + features + description + categories + brand` vectorized with TF-IDF (`10,000` dims).
-               - Rating-weighted & recency-decayed (`0.85^rank`) user profile vector retrieves top-100 unseen candidates by cosine similarity.
-            3. **Phase 1 — Ranking & SHAP Explainability (Sections 12–14)**:
-               - Monotonic XGBoost classifier trained with **Leave-One-Out** user summaries on 6 interpretable features (`>=4★` positive, `<=2★` negative, `3★` ignored).
-               - `shap.TreeExplainer` attributes exact log-odds contributions per feature, translated into deterministic natural-language explanations.
-            4. **Phase 2 — SVD Collaborative Filtering & Hybrid Combination (Sections 16–17)**:
-               - Truncated SVD over the user-item training rating matrix predicts collaborative scores normalized to `[0, 1]`.
-               - Final score blends `Score = α · Content + (1 - α) · CF` with graceful content fallback for unseen catalog items and a brand diversity cap (`<= 2` per brand).
-            5. **Upcoming Phases 3 & 4**: Time-bucket Context Scoring (`P(category | context)`) and Similarity-Based Influence Engine (`influenced_by`).
-            """
-        )
 
 
 if __name__ == "__main__":
