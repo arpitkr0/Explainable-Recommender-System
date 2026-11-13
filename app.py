@@ -272,15 +272,24 @@ def main():
         col4.metric("Blend α", f"{alpha:.2f}" if is_phase2 else "1.00 (Content)")
 
         if not is_cold:
+            # Collect all brands in user history and brands with positive (>= 4 stars) ratings
+            user_brands_counter = {}
+            for asin in user_hist["parent_asin"]:
+                b = str(meta_lookup.get(str(asin), {}).get("brand", "")).strip()
+                if b:
+                    user_brands_counter[b.title()] = user_brands_counter.get(b.title(), 0) + 1
+
+            all_user_brands_sorted = sorted(user_brands_counter.keys())
+
             user_pos_revs = user_hist[user_hist["rating"] >= 4.0]
             preferred_brands_list = []
             for asin in user_pos_revs["parent_asin"]:
-                b = meta_lookup.get(str(asin), {}).get("brand")
-                if b and b.strip() and b.title() not in preferred_brands_list:
+                b = str(meta_lookup.get(str(asin), {}).get("brand", "")).strip()
+                if b and b.title() not in preferred_brands_list:
                     preferred_brands_list.append(b.title())
 
             with st.expander(
-                f"View User Purchase History ({len(user_hist)} total reviews across {len(preferred_brands_list)} preferred brands)",
+                f"📜 User Purchase History ({len(user_hist)} total reviews across {len(user_brands_counter)} brands)",
                 expanded=True,
             ):
                 if preferred_brands_list:
@@ -290,34 +299,60 @@ def main():
                         + (f", and {len(preferred_brands_list) - 12} more..." if len(preferred_brands_list) > 12 else "")
                     )
 
-                hist_col1, hist_col2 = st.columns([1, 2])
-                with hist_col1:
+                f_col1, f_col2, f_col3 = st.columns([1, 1.2, 1.8])
+                with f_col1:
+                    opts = sorted(list({8, 20, 50, len(user_hist)}))
                     history_limit = st.selectbox(
-                        "Display count",
-                        options=[8, 20, 50, len(user_hist)],
-                        format_func=lambda x: f"Recent {x} reviews" if x < len(user_hist) else f"All {x} reviews",
+                        "Display Limit",
+                        options=opts,
+                        format_func=lambda x: f"Recent {x}" if x < len(user_hist) else f"All {x}",
                         index=0,
                         key="hist_limit_select",
                     )
-                with hist_col2:
-                    brand_search = st.text_input(
-                        "Search user's past purchases by brand or title",
-                        placeholder="e.g. Samsung, Amazon Basics...",
+                with f_col2:
+                    brand_filter = st.selectbox(
+                        "Filter by Brand",
+                        options=["All Brands"] + [f"{b} ({user_brands_counter[b]})" for b in all_user_brands_sorted],
+                        index=0,
+                        key="hist_brand_select",
+                    )
+                with f_col3:
+                    hist_search = st.text_input(
+                        "Search by title / keyword / ASIN",
+                        placeholder="e.g. cable, buds, mount (press Enter)...",
                         key="hist_search_input",
                     )
 
                 displayed_hist = user_hist
-                if brand_search.strip():
-                    search_term = brand_search.strip().lower()
-                    displayed_hist = user_hist[
-                        user_hist["parent_asin"].apply(
-                            lambda a: search_term in str(meta_lookup.get(str(a), {}).get("brand", "")).lower()
-                            or search_term in str(meta_lookup.get(str(a), {}).get("title", "")).lower()
-                            or search_term in str(a).lower()
+
+                # 1. Apply Brand Filter Dropdown
+                if brand_filter != "All Brands":
+                    sel_b = brand_filter.rsplit(" (", 1)[0].lower()
+                    displayed_hist = displayed_hist[
+                        displayed_hist["parent_asin"].apply(
+                            lambda a: str(meta_lookup.get(str(a), {}).get("brand", "")).lower() == sel_b
                         )
                     ]
-                else:
-                    displayed_hist = user_hist.head(history_limit)
+
+                # 2. Apply Text Keyword Search (splits terms and matches all tokens)
+                if hist_search.strip():
+                    tokens = hist_search.strip().lower().split()
+                    displayed_hist = displayed_hist[
+                        displayed_hist["parent_asin"].apply(
+                            lambda a: all(
+                                tok in str(meta_lookup.get(str(a), {}).get("brand", "")).lower()
+                                or tok in str(meta_lookup.get(str(a), {}).get("title", "")).lower()
+                                or tok in str(a).lower()
+                                for tok in tokens
+                            )
+                        )
+                    ]
+
+                # If no filters active, limit to top N
+                if brand_filter == "All Brands" and not hist_search.strip():
+                    displayed_hist = displayed_hist.head(history_limit)
+
+                st.caption(f"Showing **{len(displayed_hist)}** purchases from this user's history:")
 
                 recent_rows = []
                 for _, row in displayed_hist.iterrows():
@@ -339,7 +374,70 @@ def main():
                 if recent_rows:
                     st.dataframe(pd.DataFrame(recent_rows), use_container_width=True, hide_index=True)
                 else:
-                    st.info(f"No purchases found matching '{brand_search}'.")
+                    st.info("No purchases in this user's history match the selected filter.")
+
+            with st.expander("🔎 Search Entire Catalog (66,320 items) & Test Live Scoring / SHAP", expanded=False):
+                st.caption("Search for any brand or product across the full catalog to inspect its metadata, whether this user has bought it, and how the model scores and explains it.")
+                cat_col1, cat_col2 = st.columns([3, 1])
+                with cat_col1:
+                    cat_query = st.text_input(
+                        "Search Catalog by Brand, Title, or ASIN",
+                        placeholder="e.g. Sony, Apple, Samsung Galaxy, Microphone...",
+                        key="cat_search_input",
+                    )
+                with cat_col2:
+                    st.markdown("<div style='height: 28px'></div>", unsafe_allow_html=True)
+                    st.button("Search Catalog", key="cat_search_btn")
+
+                if cat_query.strip():
+                    q_toks = cat_query.strip().lower().split()
+                    cat_matches = []
+                    for asin, m in meta_lookup.items():
+                        t_lower = str(m.get("title", "")).lower()
+                        b_lower = str(m.get("brand", "")).lower()
+                        if all(tok in t_lower or tok in b_lower or tok in asin.lower() for tok in q_toks):
+                            cat_matches.append((asin, m))
+                        if len(cat_matches) >= 5:
+                            break
+
+                    if not cat_matches:
+                        st.warning(f"No catalog products matched '{cat_query}'. Try a broader term like 'headphone', 'cable', 'Samsung'.")
+                    else:
+                        st.markdown(f"**Found {len(cat_matches)} catalog matches:**")
+                        user_asins_set = set(user_hist["parent_asin"].astype(str))
+
+                        for asin, m in cat_matches:
+                            b_str = m.get("brand", "Unknown")
+                            t_str = m.get("title", "Unknown")
+                            p_val = m.get("price")
+                            p_txt = f"${p_val:.2f}" if pd.notna(p_val) else "Price N/A"
+                            has_bought = asin in user_asins_set
+
+                            with st.container(border=True):
+                                c_left, c_right = st.columns([3, 1])
+                                with c_left:
+                                    st.markdown(f"**{t_str}**")
+                                    st.caption(f"ID: `{asin}` | Brand: **{b_str.title()}** | {p_txt} | Status: {'✅ In User History' if has_bought else '🆕 Never Purchased by this User'}")
+                                with c_right:
+                                    if st.button("Score & Explain", key=f"score_cat_{asin}"):
+                                        st.session_state[f"inspect_{asin}"] = True
+
+                                if st.session_state.get(f"inspect_{asin}"):
+                                    u_summary = hybrid.phase1.feature_extractor.build_user_summary(selected_user, user_hist)
+                                    feats = hybrid.phase1.feature_extractor.extract_features(u_summary, asin)
+                                    f_df = pd.DataFrame([feats])[FEATURE_NAMES]
+                                    c_score = float(hybrid.phase1.ranker.predict_proba(f_df)[0]) if hybrid.phase1.ranker.is_fitted else float(feats.get("text_similarity", 0.0))
+                                    cf_s = hybrid.cf_model.predict_score(selected_user, asin) if (hybrid.cf_model and hybrid.cf_model.is_fitted) else None
+                                    eff_cf = cf_s if cf_s is not None else c_score
+                                    final_sc = alpha * c_score + (1.0 - alpha) * eff_cf
+
+                                    st.markdown(f"**Recommender Score: `{final_sc:.4f}`** (Content: `{c_score:.4f}`, CF: `{cf_s if cf_s is not None else 'N/A'}`)")
+                                    ins_shap = hybrid.phase1.shap_explainer.explain_instance(feats) if hybrid.phase1.shap_explainer else {}
+                                    ins_expl = hybrid.phase1.explanation_engine.get_plain_sentences(ins_shap, m, top_n=3)
+                                    for sent in ins_expl:
+                                        st.markdown(f"- *{sent}*")
+                                    if ins_shap:
+                                        st.plotly_chart(make_shap_chart(ins_shap, f"SHAP Contributions for {asin}"), use_container_width=True, key=f"insp_shap_{asin}")
 
         # Generate Recommendations
         if is_phase2:
